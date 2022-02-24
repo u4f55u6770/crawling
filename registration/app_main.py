@@ -24,7 +24,7 @@ def read_blad():
     return [sheet.row_values(i)[0] for i in range(1, sheet.nrows)]
 
 
-def capture(condition: str, urls: list, url_index: int):
+def capture(condition: str, urls: list, url_index: int, cookies=None):
     data = []
 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -32,7 +32,7 @@ def capture(condition: str, urls: list, url_index: int):
 
     filter_url_data = {'keywords': condition}
     if url_index > 0:
-        filter_response = requests.get(url=urls[url_index], data=filter_url_data, headers=headers)
+        filter_response = requests.get(url=urls[url_index], headers=headers, cookies=cookies)
     else:
         filter_response = requests.post(url=urls[url_index], data=filter_url_data, headers=headers)
     soup = BeautifulSoup(filter_response.text, 'lxml')
@@ -44,7 +44,7 @@ def capture(condition: str, urls: list, url_index: int):
         f'#_pubcrisportlet_WAR_pubcrisportlet_productSearchResultsSearchContainerPageIteratorTop > div.search-results')
     h3 = h3_arr[0].get_text() if h3_arr and len(h3_arr) > 0 else ''
     page_arr = re.findall(r'\d+', h3)
-    print("page_arr", page_arr)
+    # print("page_arr", page_arr)
     if page_arr and len(page_arr) >= 3:
         total = page_arr[2]
     elif page_arr and len(page_arr) > 0:
@@ -96,7 +96,7 @@ def capture(condition: str, urls: list, url_index: int):
 
             all_topics2 = detail_soup.select(
                 '#_pubcrisportlet_WAR_pubcrisportlet_docsContent > div:nth-child(2) > fieldset > table tr')
-            print("No:", no, " Constituents:", len(all_topics2) - 1)
+            # print("No:", no, " Constituents:", len(all_topics2) - 1)
             for i in all_topics2:
                 td_text = [td.text.strip() for td in i.find_all("td")]
                 if len(td_text) == 0:
@@ -112,7 +112,7 @@ def capture(condition: str, urls: list, url_index: int):
     # 取第二页
     if url_index == 0 and int(grab) < int(total):
         print("条件：", condition, "开始抓第二页>>>>>>>>>>>>>>>")
-        data += capture(condition, urls, 1)
+        data += capture(condition, urls, 1, filter_response.cookies)
 
     return data
 
@@ -130,10 +130,9 @@ def main():
         "_pubcrisportlet_WAR_pubcrisportlet_keywords=&_pubcrisportlet_WAR_pubcrisportlet_advancedSearch=false&"
         "_pubcrisportlet_WAR_pubcrisportlet_andOperator=true&_pubcrisportlet_WAR_pubcrisportlet_orderByCol=code&"
         "_pubcrisportlet_WAR_pubcrisportlet_orderByType=desc&_pubcrisportlet_WAR_pubcrisportlet_resetCur=false&cur=2")
-
+    next_url = "https://portal.apvma.gov.au/pubcris?p_auth=7L3oJF0Z&p_p_id=pubcrisportlet_WAR_pubcrisportlet&p_p_lifecycle=1&p_p_state=normal&p_p_mode=view&p_p_col_id=column-1&p_p_col_pos=2&p_p_col_count=4&_pubcrisportlet_WAR_pubcrisportlet_javax.portlet.action=navigate&_pubcrisportlet_WAR_pubcrisportlet_delta=75&_pubcrisportlet_WAR_pubcrisportlet_keywords=&_pubcrisportlet_WAR_pubcrisportlet_advancedSearch=false&_pubcrisportlet_WAR_pubcrisportlet_andOperator=true&_pubcrisportlet_WAR_pubcrisportlet_orderByCol=code&_pubcrisportlet_WAR_pubcrisportlet_orderByType=desc&_pubcrisportlet_WAR_pubcrisportlet_resetCur=false&cur=2"
     urls = [filter_url, next_url]
-    source_xls = []
-    conditions = ['Brodifacoum', 'Bromadiolone']  # Brodifacoum Bromadiolone
+    # conditions = ['Brodifacoum', 'Bromadiolone']  # Brodifacoum Bromadiolone
     for condition in conditions:
         export_list = []
         data = capture(condition, urls, 0)
@@ -149,35 +148,37 @@ def main():
                 v['Units'] = d['units']
             export_list.append(v)
 
-        columns = ['Active ingredient name', 'No', 'Name', 'Product type', 'Status',
-                   'Actives', 'Constituent name', 'Amount', 'Units']
-        file_name = f"Australia_{condition}.xlsx"
-        source_xls.append(os.path.join(os.path.join(base_dir, "export_files"), file_name))
-        export_excel(file_name,
-                     data=export_list,
-                     columns=columns,
-                     encoding="utf-8-sig",
-                     header=True,
-                     index=False)
+        if len(export_list) > 0:
+            columns = ['Active ingredient name', 'No', 'Name', 'Product type', 'Status',
+                       'Actives', 'Constituent name', 'Amount', 'Units']
+            file_name = f"Australia_{condition}.xlsx"
+            # source_xls.append(os.path.join(os.path.join(base_dir, "export_files"), file_name))
+            export_excel(file_name,
+                         data=export_list,
+                         columns=columns,
+                         encoding="utf-8-sig",
+                         header=True,
+                         index=False)
 
         print("===========>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
 
     # 合并excel
-    target_xls = "Australia_Data.xlsx"
-    data = []
-    for i in source_xls:
-        wb = xlrd.open_workbook(i)
-        for sheet in wb.sheets():
-            for rownum in range(sheet.nrows):
-                data.append(sheet.row_values(rownum))
-    workbook = xlsxwriter.Workbook(target_xls)
-    worksheet = workbook.add_worksheet()
-    font = workbook.add_format({"font_size": 14})
-    for i in range(len(data)):
-        for j in range(len(data[i])):
-            worksheet.write(i, j, data[i][j], font)
-    workbook.close()
+    # target_xls = "Australia_Data.xlsx"
+    # data = []
+    # for i in source_xls:
+    #     wb = xlrd.open_workbook(i)
+    #     for sheet in wb.sheets():
+    #         for rownum in range(sheet.nrows):
+    #             data.append(sheet.row_values(rownum))
+    # workbook = xlsxwriter.Workbook(target_xls)
+    # worksheet = workbook.add_worksheet()
+    # font = workbook.add_format({"font_size": 14})
+    # for i in range(len(data)):
+    #     for j in range(len(data[i])):
+    #         worksheet.write(i, j, data[i][j], font)
+    # workbook.close()
 
 
 if __name__ == '__main__':
     main()
+
